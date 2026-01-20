@@ -2,18 +2,17 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 import os
 import json
-from groq import Groq
+from google import genai
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for frontend access
 
-# Lazy initialization of Groq client
-def get_groq_client():
-    """Get or create Groq client instance"""
-    api_key = os.environ.get("GROQ_API_KEY", "")
+def get_germini_client():
+    """Get or create Gemini client instance"""
+    api_key = os.environ.get("GERMINI_API_KEY", "")
     if not api_key:
-        raise ValueError("GROQ_API_KEY environment variable is not set")
-    return Groq(api_key=api_key)
+        raise ValueError("GERMINI_API_KEY environment variable is not set")
+    return genai.Client(api_key=api_key)
 
 @app.route('/health', methods=['GET'])
 def health_check():
@@ -40,8 +39,8 @@ def grade_answer():
         if not question or not student_answer:
             return jsonify({"error": "Both question and student_answer are required"}), 400
 
-        # Get Groq client
-        client = get_groq_client()
+        # Get Gemini client
+        client = get_germini_client()
 
         # Construct the grading prompt
         if rubric:
@@ -90,38 +89,30 @@ Format your response as JSON with the following structure:
     "suggestions": "<specific suggestions>",
     "corrected_answer": "<ideal answer>"
 }}"""
-
-        # Call Groq API
+        # Call Gemini API
         chat_completion = client.chat.completions.create(
+            model="gemini-2.0-flash",
             messages=[
-                {
-                    "role": "system",
-                    "content": "You are an expert grading assistant. Always respond with valid JSON."
-                },
-                {
-                    "role": "user",
-                    "content": prompt
-                }
+                {"role": "system", "content": "You are a helpful grading assistant."},
+                {"role": "user", "content": prompt}
             ],
-            model="llama-3.3-70b-versatile",  # Free model on Groq
-            temperature=0.3,  # Lower temperature for more consistent grading
+            temperature=0.2,
             max_tokens=1024,
-            response_format={"type": "json_object"}  # Ensure JSON response
+            response_format={"type": "json_object"}
         )
 
-        # Extract and parse the JSON response
-        result_string = chat_completion.choices[0].message.content
+        #extract result from response
+        result_string = chat_completion.choices[0].message.response
         result = json.loads(result_string)
 
         return jsonify({
-            "success": True,
             "score": result.get("score"),
             "feedback_correct": result.get("feedback_correct"),
             "feedback_incorrect": result.get("feedback_incorrect"),
             "suggestions": result.get("suggestions"),
-            "corrected_answer": result.get("corrected_answer")
+            "corrected_answer": result.get("corrected_answer"),
+            "full_response": result
         }), 200
-
     except Exception as e:
         return jsonify({
             "success": False,
@@ -146,27 +137,25 @@ def correct_answer():
         if not question or not student_answer:
             return jsonify({"error": "Both question and student_answer are required"}), 400
 
-        # Get Groq client
-        client = get_groq_client()
+        # Get Gemini client
+        client = get_germini_client()
 
-        prompt = f"""Given the following question and student answer, provide a corrected version of the answer.
+        # Construct the correction prompt
+        prompt = f"""You are an expert grading assistant. Correct the following student answer.
 
 Question: {question}
 
 Student's Answer: {student_answer}
 
 Provide a clear, concise, and grammatically correct version of the answer. Only return the corrected answer text without any additional explanation."""
-
-        # Call Groq API
+        # Call Gemini API
         chat_completion = client.chat.completions.create(
+            model="gemini-2.0-flash",
             messages=[
-                {
-                    "role": "user",
-                    "content": prompt
-                }
+                {"role": "system", "content": "You are a helpful grading assistant."},
+                {"role": "user", "content": prompt}
             ],
-            model="llama-3.3-70b-versatile",
-            temperature=0.3,
+            temperature=0.2,
             max_tokens=512
         )
 
@@ -176,7 +165,6 @@ Provide a clear, concise, and grammatically correct version of the answer. Only 
             "success": True,
             "corrected_answer": corrected
         }), 200
-
     except Exception as e:
         return jsonify({
             "success": False,
@@ -184,6 +172,5 @@ Provide a clear, concise, and grammatically correct version of the answer. Only 
         }), 500
 
 if __name__ == '__main__':
-    # Run the Flask app
-    port = int(os.environ.get('PORT', 5000))
+    port = int(os.environ.get('PORT', 5001))
     app.run(host='0.0.0.0', port=port, debug=True)
