@@ -183,6 +183,95 @@ Provide a clear, concise, and grammatically correct version of the answer. Only 
             "error": str(e)
         }), 500
 
+# help OCR to fix some words that doesnt make sense
+@app.route('/adjust_ocr', methods=['POST'])
+def adjust_ocr():
+    """
+    Correct OCR output text by fixing incorrect words and improving readability
+    Expected JSON body:
+    {
+        "ocr_text": "The qick brown fox jmps over the lazy dog",
+        "context": "Optional context about the document type" (optional)
+    }
+    """
+    try:
+        data = request.json
+        ocr_text = data.get('ocr_text', '')
+        context = data.get('context', '')
+
+        if not ocr_text:
+            return jsonify({"error": "ocr_text is required"}), 400
+
+        # Get Groq client
+        client = get_groq_client()
+
+        # Construct the OCR correction prompt
+        if context:
+            prompt = f"""You are an OCR text correction expert. The following text was extracted using OCR and contains errors. Please correct spelling mistakes, fix garbled words, and improve readability while preserving the original meaning.
+
+Context: {context}
+
+OCR Text to correct:
+{ocr_text}
+
+Please provide the corrected text that:
+1. Fixes spelling errors
+2. Corrects obvious OCR mistakes (like 'rn' misread as 'm', '0' as 'O', etc.)
+3. Maintains the original structure and formatting
+4. Preserves the original meaning
+5. Uses proper grammar and punctuation
+6. Without adding new words not present in the original text
+
+Only return the corrected text without any additional explanation or commentary."""
+        else:
+            prompt = f"""You are an OCR text correction expert. The following text was extracted using OCR and contains errors. Please correct spelling mistakes, fix garbled words, and improve readability while preserving the original meaning.
+
+OCR Text to correct:
+{ocr_text}
+
+Please provide the corrected text that:
+1. Fixes spelling errors
+2. Corrects obvious OCR mistakes (like 'rn' misread as 'm', '0' as 'O', etc.)
+3. Maintains the original structure and formatting
+4. Preserves the original meaning
+5. Uses proper grammar and punctuation
+6. Without adding new words not present in the original text
+
+Only return the corrected text without any additional explanation or commentary."""
+
+        # Call Groq API
+        chat_completion = client.chat.completions.create(
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are an expert OCR text correction assistant. Correct OCR errors while preserving the original meaning and structure."
+                },
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ],
+            model="llama-3.3-70b-versatile",
+            temperature=0.1,  # Very low temperature for consistent corrections
+            max_tokens=2048
+        )
+
+        # Extract the corrected text
+        corrected_text = chat_completion.choices[0].message.content.strip()
+
+        return jsonify({
+            "success": True,
+            "original_text": ocr_text,
+            "corrected_text": corrected_text
+        }), 200
+
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
 if __name__ == '__main__':
     # Run the Flask app
     port = int(os.environ.get('PORT', 5000))
