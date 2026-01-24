@@ -3,6 +3,9 @@ import cv2
 import numpy as np
 import matplotlib.pyplot as plt
 import os
+import base64
+import io
+from PIL import Image
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 
@@ -13,8 +16,18 @@ CORS(app)
 pipeline = keras_ocr.pipeline.Pipeline()
 
 # ---------- PREPROCESSING ----------
-def preprocess_for_ocr(image_path):
-    img = cv2.imread(image_path)
+def preprocess_for_ocr(image_path=None, image_array=None):
+    """
+    Preprocess image for OCR. Can accept either a file path or a numpy array.
+    """
+    if image_array is not None:
+        # If image_array is provided, use it directly
+        img = image_array
+    elif image_path is not None:
+        # If image_path is provided, read from file
+        img = cv2.imread(image_path)
+    else:
+        raise ValueError("Either image_path or image_array must be provided")
 
     img = cv2.resize(img, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
@@ -26,6 +39,31 @@ def preprocess_for_ocr(image_path):
 
     rgb = cv2.cvtColor(gray, cv2.COLOR_GRAY2RGB)
     return rgb
+
+
+def decode_base64_image(base64_string):
+    """
+    Decode base64 string to numpy array (OpenCV format).
+    """
+    # Remove data URL prefix if present (e.g., "data:image/jpeg;base64,")
+    if ',' in base64_string:
+        base64_string = base64_string.split(',')[1]
+
+    # Decode base64 to bytes
+    image_data = base64.b64decode(base64_string)
+
+    # Convert bytes to PIL Image
+    pil_image = Image.open(io.BytesIO(image_data))
+
+    # Convert PIL to RGB if not already
+    if pil_image.mode != 'RGB':
+        pil_image = pil_image.convert('RGB')
+
+    # Convert PIL to numpy array (OpenCV format: BGR)
+    image_array = np.array(pil_image)
+    image_array = cv2.cvtColor(image_array, cv2.COLOR_RGB2BGR)
+
+    return image_array
 
 
 # ---------- NEW ADD: SORT INTO LINES ----------
@@ -98,21 +136,41 @@ def health_check():
 @app.route('/extract_text', methods=['POST'])
 def extract_text_endpoint():
     try:
-        # Check if image file is in request
-        if 'image' not in request.files:
-            return jsonify({"error": "No image file provided"}), 400
+        image_array = None
+        temp_path = None
 
-        file = request.files['image']
-        if file.filename == '':
-            return jsonify({"error": "No image file selected"}), 400
+        # Check if request contains base64 image data
+        if request.is_json and 'image' in request.json:
+            try:
+                base64_data = request.json['image']
+                image_array = decode_base64_image(base64_data)
+            except Exception as e:
+                return jsonify({"error": f"Invalid base64 image data: {str(e)}"}), 400
 
-        # Save uploaded file temporarily
-        temp_path = f"/tmp/{file.filename}"
-        file.save(temp_path)
+        # Check if image file is in request (traditional file upload)
+        elif 'image' in request.files:
+            file = request.files['image']
+            if file.filename == '':
+                return jsonify({"error": "No image file selected"}), 400
+
+            # Save uploaded file temporarily
+            temp_path = f"/tmp/{file.filename}"
+            file.save(temp_path)
+
+        else:
+            return jsonify({
+                "error": "No image provided. Send either a file upload or JSON with base64 image data."
+            }), 400
 
         try:
             # Process the image
-            image = preprocess_for_ocr(temp_path)
+            if image_array is not None:
+                # Use base64 decoded image
+                image = preprocess_for_ocr(image_array=image_array)
+            else:
+                # Use file path
+                image = preprocess_for_ocr(image_path=temp_path)
+
             raw_results = pipeline.recognize([image])[0]
             results = [(text, box) for text, box in raw_results]
             lines = sort_into_lines(results)
@@ -124,8 +182,9 @@ def extract_text_endpoint():
                 if sentence.strip():  # Only add non-empty sentences
                     extracted_text.append(sentence)
 
-            # Clean up temporary file
-            os.remove(temp_path)
+            # Clean up temporary file if it was created
+            if temp_path and os.path.exists(temp_path):
+                os.remove(temp_path)
 
             return jsonify({
                 "success": True,
@@ -135,7 +194,7 @@ def extract_text_endpoint():
 
         except Exception as e:
             # Clean up temporary file in case of error
-            if os.path.exists(temp_path):
+            if temp_path and os.path.exists(temp_path):
                 os.remove(temp_path)
             return jsonify({"error": f"OCR processing failed: {str(e)}"}), 500
 
