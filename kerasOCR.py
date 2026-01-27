@@ -1,4 +1,5 @@
 import keras_ocr
+from tensorflow import keras
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
@@ -13,7 +14,16 @@ app = Flask(__name__)
 CORS(app)
 
 # ---------- LOAD MODEL ----------
-pipeline = keras_ocr.pipeline.Pipeline()
+# pipeline = keras_ocr.pipeline.Pipeline()
+# Load your fine-tuned recognizer
+custom_recognizer_model = keras.models.load_model('models/ocr_fine_tuned.h5')
+
+# Create a recognizer object and replace its model
+recognizer = keras_ocr.recognition.Recognizer()
+recognizer.model = custom_recognizer_model
+
+# Create pipeline with default detector + your custom recognizer
+pipeline = keras_ocr.pipeline.Pipeline(recognizer=recognizer)
 
 # ---------- PREPROCESSING ----------
 def preprocess_for_ocr(image_path=None, image_array=None):
@@ -97,10 +107,6 @@ def sort_into_lines(results, y_threshold=20):
         sorted_lines.append(items)
 
     return sorted_lines
-
-
-# ---------- LOAD MODEL ----------
-pipeline = keras_ocr.pipeline.Pipeline()
 
 
 # ---------- IMAGE PATH ----------

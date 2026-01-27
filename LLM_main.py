@@ -59,6 +59,7 @@ Please provide:
 3. Detailed feedback on what's incorrect or missing
 4. Suggestions for improvement
 5. A corrected/ideal answer
+6. Ignore the numbering or bullet point in the front of the sentences or some small wrong spelling in the student answer, focus on the content
 
 Format your response as JSON with the following structure:
 {{
@@ -81,12 +82,11 @@ Please provide:
 3. Detailed feedback on what's incorrect or missing
 4. Suggestions for improvement
 5. A corrected/ideal answer
+6. Ignore the numbering or bullet point in the front of the sentences or some small wrong spelling in the student answer, focus on the content
 
 Format your response as JSON with the following structure:
 {{
     "score": <number 0-100>,
-    "feedback_correct": "<what the student got right>",
-    "feedback_incorrect": "<what needs improvement>",
     "suggestions": "<specific suggestions>",
     "corrected_answer": "<ideal answer>"
 }}"""
