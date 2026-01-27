@@ -271,6 +271,170 @@ Only return the corrected text without any additional explanation or commentary.
             "error": str(e)
         }), 500
 
+@app.route('/student_evaluate', methods=['POST'])
+def student_evaluate():
+    """
+    Generate consolidated evaluation summary from individual question feedback
+    Expected JSON body:
+    {
+        "strengths": ["• You correctly identified...", "• Great understanding of..."],
+        "improvements": ["• Need to be more specific about...", "• Consider explaining..."],
+        "suggestions": ["• Review the fundamentals of...", "• Practice more examples..."]
+    }
+    """
+    try:
+        data = request.json
+        strengths = data.get('strengths', [])
+        improvements = data.get('improvements', [])
+        suggestions = data.get('suggestions', [])
+
+        if not strengths and not improvements and not suggestions:
+            return jsonify({"error": "At least one of strengths, improvements, or suggestions is required"}), 400
+
+        # Get Groq client
+        client = get_groq_client()
+
+        # Prepare the feedback text
+        strengths_text = "\n".join(strengths) if strengths else "No specific strengths identified."
+        improvements_text = "\n".join(improvements) if improvements else "No specific areas for improvement identified."
+        suggestions_text = "\n".join(suggestions) if suggestions else "No specific study suggestions available."
+
+        prompt = f"""You are an educational assessment expert. Based on the following detailed feedback from individual questions, create a concise overall evaluation summary for a student.
+
+Individual Question Strengths:
+{strengths_text}
+
+Individual Question Areas for Improvement:
+{improvements_text}
+
+Individual Question Study Suggestions:
+{suggestions_text}
+
+Please provide a consolidated summary with:
+1. Overall Strengths: A brief paragraph highlighting the student's main strengths across all questions
+2. Areas for Improvement: A brief paragraph identifying the key areas where the student needs to improve
+3. Study Suggestions: A brief paragraph with actionable study recommendations
+
+Keep each section concise (2-3 sentences maximum) and focus on the most important themes across all questions.
+
+Format your response as JSON with the following structure:
+{{
+    "overall_strengths": "<consolidated strengths summary>",
+    "overall_improvements": "<consolidated areas for improvement>",
+    "overall_suggestions": "<consolidated study suggestions>"
+}}"""
+
+        # Call Groq API
+        chat_completion = client.chat.completions.create(
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are an educational assessment expert. Always respond with valid JSON that consolidates detailed feedback into concise summaries."
+                },
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ],
+            model="llama-3.3-70b-versatile",
+            temperature=0.3,
+            max_tokens=1024,
+            response_format={"type": "json_object"}
+        )
+
+        # Extract and parse the JSON response
+        result_string = chat_completion.choices[0].message.content
+        result = json.loads(result_string)
+
+        return jsonify({
+            "success": True,
+            "overall_strengths": result.get("overall_strengths", ""),
+            "overall_improvements": result.get("overall_improvements", ""),
+            "overall_suggestions": result.get("overall_suggestions", "")
+        }), 200
+
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+        data = request.json
+        strengths = data.get('strengths', [])
+        improvements = data.get('improvements', [])
+        suggestions = data.get('suggestions', [])
+
+        if not strengths and not improvements and not suggestions:
+            return jsonify({"error": "At least one of strengths, improvements, or suggestions is required"}), 400
+
+        # Get Groq client
+        client = get_groq_client()
+
+        # Prepare the feedback text
+        strengths_text = "\n".join(strengths) if strengths else "No specific strengths identified."
+        improvements_text = "\n".join(improvements) if improvements else "No specific areas for improvement identified."
+        suggestions_text = "\n".join(suggestions) if suggestions else "No specific study suggestions available."
+
+        prompt = f"""You are an educational assessment expert. Based on the following detailed feedback from individual questions, create a concise overall evaluation summary for a student.
+
+Individual Question Strengths:
+{strengths_text}
+
+Individual Question Areas for Improvement:
+{improvements_text}
+
+Individual Question Study Suggestions:
+{suggestions_text}
+
+Please provide a consolidated summary with:
+1. Overall Strengths: A brief paragraph highlighting the student's main strengths across all questions
+2. Areas for Improvement: A brief paragraph identifying the key areas where the student needs to improve
+3. Study Suggestions: A brief paragraph with actionable study recommendations
+
+Keep each section concise (2-3 sentences maximum) and focus on the most important themes across all questions.
+
+Format your response as JSON with the following structure:
+{{
+    "overall_strengths": "<consolidated strengths summary>",
+    "overall_improvements": "<consolidated areas for improvement>",
+    "overall_suggestions": "<consolidated study suggestions>"
+}}"""
+
+        # Call Groq API
+        chat_completion = client.chat.completions.create(
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are an educational assessment expert. Always respond with valid JSON that consolidates detailed feedback into concise summaries."
+                },
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ],
+            model="llama-3.3-70b-versatile",
+            temperature=0.3,
+            max_tokens=1024,
+            response_format={"type": "json_object"}
+        )
+
+        # Extract and parse the JSON response
+        result_string = chat_completion.choices[0].message.content
+        result = json.loads(result_string)
+
+        return jsonify({
+            "success": True,
+            "overall_strengths": result.get("overall_strengths", ""),
+            "overall_improvements": result.get("overall_improvements", ""),
+            "overall_suggestions": result.get("overall_suggestions", "")
+        }), 200
+
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
 
 if __name__ == '__main__':
     # Run the Flask app
