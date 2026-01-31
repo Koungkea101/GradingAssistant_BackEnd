@@ -139,7 +139,7 @@ def health_check():
     return jsonify({"status": "healthy", "service": "keras-ocr"}), 200
 
 
-@app.route('/extract_text', methods=['POST'])
+@app.route('/perform_ocr', methods=['POST'])
 def extract_text_endpoint():
     try:
         image_array = None
